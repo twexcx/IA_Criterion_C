@@ -11,7 +11,8 @@ import SwiftUI
 struct Criterion_CApp: App {
     var body: some Scene {
         WindowGroup {
-            ContentView()
+            SplashView()
+           
         }
     }
 }
