@@ -162,5 +162,5 @@ struct MainScreen: View {
 }
 
 #Preview{
-   LogInScreen()
+    LogInScreen()
 }
