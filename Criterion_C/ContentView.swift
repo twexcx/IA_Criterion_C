@@ -174,6 +174,7 @@ struct CalendarScreen: View {
                     .environmentObject(dateHolder)
                     .padding()
                 dayOfWeekStack
+                CalendarGrid
             }
            
         }
@@ -191,9 +192,15 @@ struct CalendarScreen: View {
              
         }
     }
-    var CalendarGrid: some View{
-       
+    var CalendarGrid: some View
+    {
         VStack(spacing: 1){
+            let daysInMonth = CalendarHelper().daysInMonth(dateHolder.date)
+            let firstDayOfMonth = CalendarHelper().firstOfMonth(dateHolder.date)
+            let startingSpaces = CalendarHelper().weekDate(firstDayOfMonth)
+            let prevMonth = CalendarHelper().minusMonth(dateHolder.date)
+            let daysInPrevMonth = CalendarHelper().daysInMonth(prevMonth)
+
             ForEach(0..<6)
             {
                 row in
@@ -202,12 +209,14 @@ struct CalendarScreen: View {
                     ForEach(1..<8){
                         column in
                         let count = column + (row + 7) //what day we should be displaying
-                        
+                        CalendarCell(count: count, startingSpaces: startingSpaces, daysInMonth:daysInMonth, daysInPrevMonth: daysInPrevMonth)
+                            .environmentObject(dateHolder)
                     }
                 }
             }
              
         }
+        .frame(maxHeight: .infinity)
     }
 }
 extension Text

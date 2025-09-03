@@ -42,4 +42,9 @@ class CalendarHelper
         let components = calendar.dateComponents([.year, .month], from: date)
         return calendar.date(from: components)!
     }
+    func weekDate(_ date: Date) -> Int
+    {
+        let components = calendar.dateComponents([.weekday], from: date)
+        return components.weekday! - 1
+    }
 }
