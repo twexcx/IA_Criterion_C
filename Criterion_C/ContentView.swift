@@ -1,4 +1,5 @@
 import SwiftUI
+import Foundation
 
 struct SplashView: View {
     @State private var LogInOn = false // if log in screen works or not
@@ -128,7 +129,7 @@ struct MainScreen: View {
                     Spacer()
                     NavigationLink("Calendar                  ")
                     {
-                        
+                        CalendarScreen()
                     }
                     .background(.LIC)
                     .cornerRadius(30)
@@ -160,7 +161,63 @@ struct MainScreen: View {
         }
     }
 }
-
-#Preview{
-    LogInScreen()
+struct CalendarScreen: View {
+    @EnvironmentObject var dateHolder: Dateholder
+    var body: some View {
+        ZStack
+        {
+            Color(.BCG)
+                .ignoresSafeArea()
+            VStack(spacing: 1)
+            {
+                DateScrollerView()
+                    .environmentObject(dateHolder)
+                    .padding()
+                dayOfWeekStack
+            }
+           
+        }
+       
+    }
+    var dayOfWeekStack: some View{
+        HStack(spacing: 1){
+            Text("Sun").dayOfWeek()
+            Text("Mon").dayOfWeek()
+            Text("Tue").dayOfWeek()
+            Text("Wed").dayOfWeek()
+            Text("Thu").dayOfWeek()
+            Text("Fri").dayOfWeek()
+            Text("Sat").dayOfWeek()
+             
+        }
+    }
+    var CalendarGrid: some View{
+       
+        VStack(spacing: 1){
+            ForEach(0..<6)
+            {
+                row in
+                HStack(spacing: 1)
+                {
+                    ForEach(1..<8){
+                        column in
+                        let count = column + (row + 7) //what day we should be displaying
+                        
+                    }
+                }
+            }
+             
+        }
+    }
+}
+extension Text
+{
+    func dayOfWeek() -> some View
+    {
+        self.frame(maxWidth:.infinity)
+            .padding(.top,1)
+            .lineLimit(1)
+            .font(.custom("Caveat-SemiBold", size: 25))
+    }
+    
 }

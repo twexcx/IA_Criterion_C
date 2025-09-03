@@ -11,7 +11,9 @@ import SwiftUI
 struct Criterion_CApp: App {
     var body: some Scene {
         WindowGroup {
+            let dateHolder = Dateholder()
             SplashView()
+                .environmentObject(dateHolder)
            
         }
     }
