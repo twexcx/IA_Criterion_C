@@ -567,6 +567,7 @@ struct PomodoroTimerView: View
                     .font(.custom("Caveat-SemiBold", size:  30, relativeTo: .title3))
                     .foregroundStyle(.LIC)
                     .padding(.top, 20)
+                
                 // Session or Break indicator
                 if isWorkPhase
                 {
