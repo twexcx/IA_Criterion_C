@@ -2,11 +2,16 @@
 //  DateHolder.swift
 //  Criterion_C
 //
-//  Created by Twexcx on 03/09/2025.
+//  Created by Twexcx on 22/09/2025.
 //
 
 import Foundation
-class Dateholder: ObservableObject
-{
-    @Published var date  = Date()
+import SwiftUI
+
+final class DatehHolder: ObservableObject {
+    @Published var date: Date
+
+    init(date: Date = Date()) {
+        self.date = date
+    }
 }
