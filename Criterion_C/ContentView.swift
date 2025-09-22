@@ -166,7 +166,7 @@ struct MainScreen: View
                     .padding(.all, 5)
                     NavigationLink("Study Sessions          ")
                     {
-                        
+                        StudySessionView()
                     }
                     
                     .background(.LIC)
@@ -318,6 +318,8 @@ struct DeadlineEditView: View
     @State private var startDate: Date
     @State private var endDate: Date
     @State private var priority: Priority
+    @State private var studyTimeValue: String //text inout for numeric value
+    @State private var studyTimeUnitIndex: Int //0 = hours, 1 = minutes
     
     private let existingDeadline: LocalDeadline? //if not nil, we are editing this deadline
     
@@ -330,6 +332,17 @@ struct DeadlineEditView: View
         _endDate = State(initialValue: deadline?.endDate ??
         Calendar.current.date(byAdding: .hour, value: 1, to: Date()) ?? Date())
         _priority = State(initialValue: deadline?.priority ?? .oneStar)
+        let estMinutes = deadline?.estimatedStudyTime ?? 0
+        if estMinutes % 60 == 0
+        {
+            _studyTimeUnitIndex = State(initialValue: 0)
+            _studyTimeValue = State(initialValue: estMinutes == 0 ? "" : String(estMinutes/60))
+        }
+        else
+        {
+            _studyTimeUnitIndex = State(initialValue: 1)
+            _studyTimeValue = State(initialValue: String(estMinutes))
+        }
     }
     var body: some View
     {
@@ -379,7 +392,26 @@ struct DeadlineEditView: View
                     }
                     .pickerStyle(.segmented)
                     .padding(.bottom, 8)
-                    
+                    Text("Estimated Study Time:")
+                        .font(.custom("Caveat-SemiBold", size: 22))
+                        .foregroundStyle(.LIC)
+                    HStack {
+                        TextField("Enter number", text: $studyTimeValue)
+                            .keyboardType(.numberPad)
+                            .padding(.horizontal).padding(.vertical, 8)
+                            .background(Color(.LIC))
+                            .cornerRadius(8)
+                            .font(.custom("Caveat-SemiBold", size: 22))
+                            .foregroundStyle(Color(.BCG))
+                        Picker("", selection: $studyTimeUnitIndex)
+                        {
+                        Text("hours").tag(0)
+                        Text("minutes").tag(1)
+                        }
+                        .pickerStyle(.segmented)
+                        .frame(width: 150)
+                    }
+                                        
                     //Delete button (only showed in edit mode)
                     if let deadline = existingDeadline {
                         Button(role: .destructive)
@@ -420,15 +452,17 @@ struct DeadlineEditView: View
                         let finalTitle = trimmedTitle.isEmpty ? "(No title)" : trimmedTitle
                         let start = startDate <= endDate ? startDate : endDate
                         let end = startDate <= endDate ? endDate : startDate
+                        let inputMinutes = (Int(studyTimeValue) ?? 0) * (studyTimeUnitIndex == 0 ? 60 : 1)
                         let newOrUpdated: LocalDeadline
                         if let oldDeadline = existingDeadline
                         {
                          //GIve same ID
-                            newOrUpdated = LocalDeadline(id: oldDeadline.id, title: finalTitle, startDate: start, endDate: end, priority: priority)
+                            newOrUpdated = LocalDeadline(id: oldDeadline.id, title: finalTitle, startDate: start, endDate: end, priority: priority,                                        estimatedStudyTime: inputMinutes)
                         }
                         else
                         {
-                            newOrUpdated = LocalDeadline(id: UUID(), title: finalTitle, startDate: start, endDate: end, priority: priority)
+                            newOrUpdated = LocalDeadline(id: UUID(), title: finalTitle, startDate: start, endDate: end, priority: priority,
+                                                         estimatedStudyTime: inputMinutes)
                         }
                         deadlineStorage.addOrUpdateDeadline(newOrUpdated)
                         dismiss()
@@ -440,3 +474,171 @@ struct DeadlineEditView: View
         .tint(Color("LIC"))
     }
 }
+struct StudySessionView: View {
+    @EnvironmentObject var deadlineStorage: DeadlineStorage
+    @EnvironmentObject var dateHolder: DatehHolder
+    @State private var scheduleByDate: [Date: [StudySession]] = [:]
+    @State private var sortedDates: [Date] = []
+    
+
+    // Generate the study schedule whenever the view appears
+    func refreshSchedule()
+    {
+        scheduleByDate = generateStudySchedule(from: deadlineStorage.deadlines)
+        sortedDates = scheduleByDate.keys.sorted()
+    }
+    
+    var body: some View
+    {
+        NavigationStack
+        {
+            ZStack
+            {
+                Color(.BCG)
+                    .ignoresSafeArea()
+                ScrollView
+                {
+                    LazyVStack(alignment: .leading, spacing: 20)
+                    {
+                        ForEach(sortedDates, id: \.self)
+                        {
+                            date in
+                            Text(date.formatted(date: .abbreviated, time: .omitted))
+                                .font(.custom("Caveat-SemiBold", size: 40, relativeTo: .title3))
+                                .foregroundStyle(.CMC)
+                                .padding(.horizontal, 6)
+                         
+                            ForEach(scheduleByDate[date] ?? [])
+                            {
+                                session in
+                                // Each block as a tappable item launching the Pomodoro timer
+                                NavigationLink(destination: PomodoroTimerView(taskTitle: session.title)
+                                        .environmentObject(deadlineStorage)
+                                        .environmentObject(dateHolder))
+                                {
+                                    Text(session.title)
+                                        .font(.custom("Caveat-SemiBold", size: 22, relativeTo: .title3))
+                                        .padding(.horizontal, 12).padding(.vertical, 8)
+                                        .background(Color(.CMC))
+                                        .cornerRadius(15)
+                                        .foregroundStyle(.BCG)
+                                }
+                            }
+                            .padding(.horizontal)
+                            .padding(.bottom, 10)
+                        }
+                    }
+                    .padding(.top, 8)
+                }
+            }
+            .navigationTitle("Study Sessions")
+            .navigationBarTitleDisplayMode(.inline)
+            .onAppear(perform: refreshSchedule)
+        }
+        .tint(Color(.LIC))
+    }
+}
+struct PomodoroTimerView: View
+{
+    let taskTitle: String
+    
+    // Pomodoro timing (seconds)
+    private let workDuration = 25 * 60
+    private let shortBreakDuration = 5 * 60
+    private let longBreakDuration = 15 * 60
+    
+    @State private var timeRemaining = 25 * 60  // start at 25:00
+    @State private var isWorkPhase = true       // start in work mode
+    @State private var currentWorkCount = 0     // how many work sessions completed in this cycle
+    
+    // Timer publisher to tick every second
+    private let timer = Timer.publish(every: 1, on: .main, in: .common).autoconnect()
+    
+    var body: some View
+    {
+        ZStack
+        {
+            Color(.BCG)
+                .ignoresSafeArea()
+            VStack(spacing: 20)
+            {
+                // Task title
+                Text(taskTitle)
+                    .font(.custom("Caveat-SemiBold", size:  30, relativeTo: .title3))
+                    .foregroundStyle(.LIC)
+                    .padding(.top, 20)
+                // Session or Break indicator
+                if isWorkPhase
+                {
+                    Text("Pomodoro \(currentWorkCount + 1) of 4")
+                        .font(.custom("Caveat-SemiBold", size: 24))
+                        .foregroundStyle(.CMC)
+                }
+                else
+                {
+                    // Show "Short Break" or "Long Break"
+                    Text(currentWorkCount == 4 ? "Long Break" : "Short Break")
+                        .font(.custom("Caveat-SemiBold", size: 24))
+                        .foregroundStyle(.CMC)
+                }
+                // Countdown timer display (MM:SS)
+                Text(timeString(from: timeRemaining))
+                    .font(.custom("Caveat-SemiBold", size: 60))
+                    .foregroundStyle(.LIC)
+                    .padding(.top, 10)
+                
+                Spacer()
+              
+            }
+        }
+        .navigationTitle("Pomodoro Timer")
+        .navigationBarTitleDisplayMode(.inline)
+        .onReceive(timer) { _ in
+            guard timeRemaining > 0 else
+            {
+                // When current interval ends, transition to next phase
+                if isWorkPhase
+                {
+                    // Work session just finished
+                    currentWorkCount += 1
+                    if currentWorkCount < 4
+                    {
+                        // Regular short break
+                        isWorkPhase = false
+                        timeRemaining = shortBreakDuration
+                    }
+                    else
+                    {
+                        // 4th session finished – long break
+                        isWorkPhase = false
+                        timeRemaining = longBreakDuration
+                    }
+                }
+                else
+                {
+                    // Break just finished
+                    if currentWorkCount >= 4
+                    {
+                        // Long break finished, reset cycle
+                        currentWorkCount = 0
+                    }
+                    // Start next work session
+                    isWorkPhase = true
+                    timeRemaining = workDuration
+                }
+                return
+            }
+            // Countdown ticking
+            timeRemaining -= 1
+        }
+    }
+    
+    // Helper to format seconds as MM:SS
+    private func timeString(from seconds: Int) -> String
+    {
+        let mins = seconds / 60
+        let secs = seconds % 60
+        return String(format: "%02d:%02d", mins, secs)
+    }
+}
+

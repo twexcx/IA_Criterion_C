@@ -21,4 +21,5 @@ struct LocalDeadline: Identifiable, Equatable, Codable {
     var startDate: Date
     var endDate: Date
     var priority: Priority
+    var estimatedStudyTime: Int = 0 //in minutes
 }
