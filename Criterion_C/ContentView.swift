@@ -196,119 +196,124 @@ struct CalendarScreen: View
 {
     @EnvironmentObject var deadlineStorage: DeadlineStorage
     @EnvironmentObject var dateHolder: DatehHolder
-    @State private var showingEditView = false
+    @State private var showNewDeadline = false
     @State private var deadlineToEdit: LocalDeadline? = nil
-    var body: some View
+    
+    private func deadlinesForSelectedDay() -> [LocalDeadline]
     {
-        NavigationStack
+        let selectedDate = dateHolder.date
+        let cal = Calendar.current
+        return deadlineStorage.deadlines
+            .filter { cal.isDate($0.startDate, equalTo: selectedDate, toGranularity: .day) }
+            .sorted(by: { $0.startDate < $1.startDate })
+    }
+        var body: some View
         {
-            ZStack
+            NavigationStack
             {
-                Color(.BCG)
-                    .ignoresSafeArea()
-                VStack(alignment: .leading)
+                ZStack
                 {
-                    // 1. Calendar Date Picker
-                    DatePicker("Select Date", selection: $dateHolder.date, displayedComponents: [.date])
-                        .datePickerStyle(.graphical)
-                        .accentColor(Color(.CMC))
-                        .padding()
-                        .background(Color(.CMC))
-                        .cornerRadius(12)
-                        .padding(.horizontal)
-                    
-                    // 2. List of events for the selected day
-                    let selectedDate = dateHolder.date
-                    let calendar = Calendar.current
-                    let deadlinesForDay = deadlineStorage.deadlines.filter
+                    Color(.BCG).ignoresSafeArea()
+                    VStack(alignment: .leading)
                     {
-                        calendar.isDate($0.startDate, equalTo: selectedDate, toGranularity: .day)
-                    }
-                    .sorted(by: {$0.startDate < $1.startDate})
-                    Text("Events on \(selectedDate.formatted(date: .abbreviated,time: .omitted))")
-                        .font(.custom("Caveat-SemiBold", size: 40, relativeTo: .title3))
-                        .foregroundStyle(.CMC)
-                        .padding(.horizontal, 6)
-                    
-                    ScrollView
-                    {
-                        LazyVStack(spacing: 10)
+                        // 1) Date picker
+                        DatePicker("Select Date", selection: $dateHolder.date, displayedComponents: [.date])
+                            .datePickerStyle(.graphical)
+                            .accentColor(Color(.CMC))
+                            .padding()
+                            .background(Color(.CMC))
+                            .cornerRadius(12)
+                            .padding(.horizontal)
+                        
+                        // 2) Title
+                        Text("Deadlines on \(dateHolder.date.formatted(date: .abbreviated, time: .omitted))")
+                            .font(.custom("Caveat-SemiBold", size: 40, relativeTo: .title3))
+                            .foregroundStyle(.CMC)
+                            .padding(.horizontal, 6)
+                        
+                        // 3) List
+                        let items = deadlinesForSelectedDay()
+                        ScrollView
                         {
-                            ForEach(deadlinesForDay)
+                            if items.isEmpty
                             {
-                                deadline in
-                                VStack (alignment: .leading, spacing: 4)
+                                Text("No deadline(s) for this date")
+                                    .font(.custom("Caveat-SemiBold", size: 20))
+                                    .foregroundStyle(.LIC)
+                                    .padding(.top, 20)
+                            }
+                            else
+                            {
+                                LazyVStack(spacing: 10)
                                 {
-                                    Text(deadline.title)
-                                        .font(.custom("Caveat-SemiBold", size: 22, relativeTo: .title3))
-                                        
-                                    Text(timeRangeText(for: deadline))
-                                        .font(.custom("Caveat-SemiBold", size: 18, relativeTo: .title3))
-                                        .padding()
-                                        .background(Color(.LIC))
-                                        .cornerRadius(15)
-                                        .foregroundStyle(.BCG)
-                                    
-                                    .onTapGesture
+                                    ForEach(items)
                                     {
-                                        deadlineToEdit = deadline
-                                        showingEditView = true
-                                    }
-                                      
-                                    if deadlinesForDay.isEmpty {
-                                        Text("No dea for this date")
-                                            .font(.custom("Caveat-SemiBold", size: 20))
-                                            .foregroundStyle(.LIC)
-                                            .padding(.top, 20)
+                                        deadline in
+                                        VStack(alignment: .leading, spacing: 4)
+                                        {
+                                            Text(deadline.title)
+                                                .font(.custom("Caveat-SemiBold", size: 22, relativeTo: .title3))
+                                            
+                                            Text(timeRangeText(for: deadline))
+                                                .font(.custom("Caveat-SemiBold", size: 18, relativeTo: .title3))
+                                                .padding()
+                                                .background(Color(.LIC))
+                                                .cornerRadius(15)
+                                                .foregroundStyle(.BCG)
+                                        }
+                                        .padding(.horizontal)
+                                        .padding(.bottom, 10)
+                                        .contentShape(Rectangle())           // make padding tappable
+                                        .onTapGesture {
+                                            deadlineToEdit = deadline          // opens edit sheet
+                                        }
                                     }
                                 }
-                                .padding(.horizontal)
-                                .padding(.bottom, 10)
                             }
                         }
                     }
-             
                 }
-            }
-            .navigationTitle("My Calendar")
-            .navigationBarTitleDisplayMode(.inline)
-            
-            .toolbar
-            {
-                // Add event button
-                ToolbarItem(placement: .topBarTrailing)
+                .navigationTitle("My Calendar")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            showNewDeadline = true
+                        } label: {
+                            Image(systemName: "plus").font(.title2)
+                        }
+                        .foregroundColor(.LIC)
+                    }
+                }
+                
+                // NEW — always passes nil
+                .sheet(isPresented: $showNewDeadline)
                 {
-                    Button
-                    {
-                        deadlineToEdit = nil
-                        showingEditView = true
-                    }
-                    label:
-                    {
-                       Image(systemName: "plus")
-                            .font(.title2)
-                    }
-                    .foregroundColor(.LIC)
+                    DeadlineEditView(deadline: nil)
+                        .environmentObject(deadlineStorage)
+                }
+                
+                // EDIT — uses the selected item identity
+                .sheet(item: $deadlineToEdit)
+                {
+                    dl in
+                    DeadlineEditView(deadline: dl)
+                        .id(dl.id) // forces rebuild with correct item
+                        .environmentObject(deadlineStorage)
                 }
             }
-            .sheet(isPresented: $showingEditView)
-            {
-                DeadlineEditView(deadline: deadlineToEdit)
-                    .environmentObject(deadlineStorage)
-            }
+            .tint(Color("LIC"))
         }
-        .tint(Color("LIC"))
+        
+        func timeRangeText(for deadline: LocalDeadline) -> String {
+            let df = DateFormatter()
+            df.dateFormat = "HH:mm"
+            let startStr = df.string(from: deadline.startDate)
+            let endStr = df.string(from: deadline.endDate)
+            return "\(startStr) - \(endStr) • Priority: \(deadline.priority.symbol)"
+        }
     }
-   
-    func timeRangeText(for deadline: LocalDeadline) -> String
-    {
-        let df = DateFormatter()
-        df.dateFormat = "HH:mm"
-        let startStr = df.string(from: deadline.startDate)
-        let endStr = df.string(from: deadline.endDate)
-        return "\(startStr) - \(endStr) • Priority: \(deadline.priority.symbol)"
-    }
-}
+
 struct DeadlineEditView: View
 {
     @EnvironmentObject var deadlineStorage: DeadlineStorage
@@ -358,7 +363,7 @@ struct DeadlineEditView: View
                     Text("Title:")
                         .font(.custom("Caveat-SemiBold", size: 22))
                         .foregroundStyle(.LIC)
-                    TextField("EventTitle", text: $title)
+                    TextField("Deadline Title", text: $title)
                         .padding(.horizontal)
                         .padding(.vertical, 8)
                         .background(Color(.LIC))
@@ -367,12 +372,12 @@ struct DeadlineEditView: View
                         .foregroundStyle(Color(.BCG))
                     
                     //Start date and time
-                    Text("Start date and time:")
+                    Text("Start Date & Time:")
                         .font(.custom("Caveat-SemiBold", size: 22))
-                        .foregroundStyle(.LIC)
+                        .foregroundStyle(.CMC)
                     DatePicker("Start Date", selection: $startDate,displayedComponents: [.date, .hourAndMinute])
                         .datePickerStyle(.compact)
-                        .foregroundColor(Color(.LIC))
+                        .foregroundColor(Color(.CMC))
                     
                     //End date and time
                     Text("End Date & Time:")
@@ -383,7 +388,7 @@ struct DeadlineEditView: View
                         .foregroundColor(Color(.LIC))
                     Text("Priority:")
                         .font(.custom("Caveat-SemiBold", size: 22))
-                        .foregroundStyle(.LIC)
+                        .foregroundStyle(.CMC)
                     Picker("Priority", selection: $priority)
                     {
                         Text("*").tag(Priority.oneStar)
@@ -431,7 +436,7 @@ struct DeadlineEditView: View
                 }
                 .padding()
             }
-            .navigationTitle(existingDeadline == nil ? "New event" : "Edit event")
+            .navigationTitle(existingDeadline == nil ? "New deadline" : "Edit deadline")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar
             {
